@@ -1,4 +1,5 @@
 # Data prep for municipality longlist
+readRenviron("../.env")
 
 library(msmdata)
 library(tidyverse)
@@ -16,6 +17,11 @@ msn_network <- read_blob_data("Data/spatialfiles/msn_mainstreets.parquet", type 
 
 msn_alberta <- msn_network |>
   filter(PRUID == 48)
+
+# st_write(
+#   msn_alberta |> st_transform(crs = 4326), 
+#   "map_layers/msn_alberta.geojson",
+#   delete_dsn = TRUE)
 
 # Join ----------------
 
@@ -42,31 +48,30 @@ pop_table <- pop_est |>
     pop_change_2025_2050 = (population_2050 - population_2025) / population_2025 * 100
   )
 
-st_write(pop_table, "output/pop_table.csv")
+# st_write(pop_table, "output/pop_table.csv")
 
+municipalities <- c(
+    "Airdrie",
+    "Medicine Hat",
+    "Drumheller",
+    "Chestermere",
+    "Calmar",
+    "Sturgeon County",
+    "Lethbridge",
+    "Spruce Grove",
+    "Fort Mcmurray")
 
+msn_subset <- msn_alberta |>
+  filter(R_PLACE %in% municipalities)
 
-
-
-
-# municipalities <- c(
-#     "Airdrie",
-#     "Medicine Hat",
-#     "Drumheller",
-#     "Chestermere",
-#     "Calmar")
-
-# msn_subset <- msn_alberta |>
-#   filter(R_PLACE %in% municipalities)
-
-# leaflet(msn_subset |> st_transform(crs = 4326)) |>
-#   addTiles() |>
-#   addPolylines(
-#     weight = 3,
-#     opacity = 0.8,
-#     label = ~R_STNAM,
-#     popup = ~paste0(
-#       "<b>", R_STNAM, "</b><br>",
-#       "<em>", R_PLACE, "</em>", "<br>"
-#     )
-#   )
+leaflet(msn_subset |> st_transform(crs = 4326)) |>
+  addTiles() |>
+  addPolylines(
+    weight = 3,
+    opacity = 0.8,
+    label = ~R_PLACE,
+    popup = ~paste0(
+      "<b>", R_STNAM, "</b><br>",
+      "<em>", R_PLACE, "</em>", "<br>"
+    )
+  )

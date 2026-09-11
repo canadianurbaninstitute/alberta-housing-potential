@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Alberta Housing Potential</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <link
+      href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/pmtiles@3.0.6/dist/pmtiles.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "Inter", sans-serif;
+      }
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+      }
+      #pop-filter {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1;
+        background: white;
+        padding: 10px 14px;
+        border-radius: 4px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        font-size: 13px;
+      }
+      #pop-filter-numbers {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding-top: 6px;
+      }
+      #pop-filter-numbers input {
+        width: 80px;
+      }
+      #legend {
+        position: absolute;
+        bottom: 20px;
+        left: 10px;
+        z-index: 1;
+        background: white;
+        padding: 10px 14px;
+        border-radius: 4px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        font-size: 13px;
+      }
+      #legend-title {
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .legend-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        line-height: 1.6;
+      }
+      .legend-swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 2px;
+        flex-shrink: 0;
+      }
+      .legend-swatch-line {
+        width: 14px;
+        height: 3px;
+        border-radius: 1px;
+        flex-shrink: 0;
+      }
+      #legend-divider {
+        border: none;
+        border-top: 1px solid #e1e0d9;
+        margin: 8px 0;
+      }
+      #search-box {
+        margin-top: 8px;
+      }
+      #csd-search {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        font-family: "Inter", sans-serif;
+        font-size: 13px;
+      }
+      #geo-search-box {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1;
+      }
+      #geo-search-input {
+        width: 260px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        border: none;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        font-family: "Inter", sans-serif;
+        font-size: 13px;
+      }
+      #export-csv-btn {
+        width: 100%;
+        margin-top: 8px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        background: white;
+        font-family: "Inter", sans-serif;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      #export-csv-btn:hover {
+        background: #f2f2f2;
+      }
+      #selected-panel {
+        margin-top: 8px;
+      }
+      #selected-title {
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      #selected-list {
+        width: 100%;
+        box-sizing: border-box;
+        height: 100px;
+        resize: vertical;
+        font-family: "Inter", sans-serif;
+        font-size: 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 4px 6px;
+      }
+      #selected-buttons {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      #copy-selection-btn,
+      #clear-selection-btn {
+        flex: 1;
+        padding: 6px 8px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        background: white;
+        font-family: "Inter", sans-serif;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      #copy-selection-btn:hover,
+      #clear-selection-btn:hover {
+        background: #f2f2f2;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="pop-filter">
+      <b>Filter by Population (2025)</b>
+      <div id="pop-filter-numbers">
+        <input
+          type="text"
+          inputmode="numeric"
+          id="pop-filter-min-input"
+          value="0"
+        />
+        &ndash;
+        <input
+          type="text"
+          inputmode="numeric"
+          id="pop-filter-max-input"
+          value="1,612,834"
+        />
+      </div>
+      <button id="export-csv-btn" type="button">
+        Export visible CSDs (CSV)
+      </button>
+      <div id="selected-panel">
+        <div id="selected-title" style="padding-top: 20px">
+          Selected CSDs (<span id="selected-count">0</span>)
+        </div>
+        <textarea id="selected-list" readonly></textarea>
+        <div id="selected-buttons">
+          <button id="copy-selection-btn" type="button">Copy list</button>
+          <button id="clear-selection-btn" type="button">
+            Clear selection
+          </button>
+        </div>
+      </div>
+      <div style="padding-top: 20px"><b>Search</b></div>
+      <div id="search-box">
+        <input
+          type="text"
+          id="csd-search"
+          list="csd-options"
+          placeholder="Search for a municipality"
+          autocomplete="off"
+        />
+        <datalist id="csd-options"></datalist>
+      </div>
+    </div>
+    <div id="legend">
+      <div id="legend-title">Population (2025)</div>
+      <div class="legend-row">
+        <span class="legend-swatch" style="background: #feebe2"></span> &lt;
+        2,000
+      </div>
+      <div class="legend-row">
+        <span class="legend-swatch" style="background: #fcc5c0"></span> 2,000
+        &ndash; 4,999
+      </div>
+      <div class="legend-row">
+        <span class="legend-swatch" style="background: #fa9fb5"></span> 5,000
+        &ndash; 9,999
+      </div>
+      <div class="legend-row">
+        <span class="legend-swatch" style="background: #f768a1"></span> 10,000
+        &ndash; 24,999
+      </div>
+      <div class="legend-row">
+        <span class="legend-swatch" style="background: #dd3497"></span> 25,000
+        &ndash; 49,999
+      </div>
+      <div class="legend-row">
+        <span class="legend-swatch" style="background: #ae017e"></span> 50,000
+        &ndash; 99,999
+      </div>
+      <div class="legend-row">
+        <span class="legend-swatch" style="background: #7a0177"></span>
+        &ge; 100,000
+      </div>
+      <hr id="legend-divider" />
+      <div class="legend-row">
+        <span class="legend-swatch-line" style="background: #00adf2"></span>
+        Main Street
+      </div>
+    </div>
+    <script>
+      const protocol = new pmtiles.Protocol();
+      maplibregl.addProtocol("pmtiles", protocol.tile);
+
+      const map = new maplibregl.Map({
+        container: "map",
+        style: "https://tiles.openfreemap.org/styles/liberty",
+        center: [-114.5, 55],
+        zoom: 5,
+      });
+
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+      map.on("load", () => {
+        map.addSource("csd", {
+          type: "vector",
+          url: "pmtiles://map_layers/alberta_csd.pmtiles",
+          promoteId: "CSDUID",
+        });
+
+        map.addSource("msn", {
+          type: "vector",
+          url: "pmtiles://map_layers/msn_alberta_trim.pmtiles",
+        });
+
+        map.addLayer({
+          id: "csd-fill",
+          type: "fill",
+          source: "csd",
+          "source-layer": "csd",
+          paint: {
+            "fill-color": [
+              "step",
+              ["get", "population_2025"],
+              "#feebe2",
+              2000,
+              "#fcc5c0",
+              5000,
+              "#fa9fb5",
+              10000,
+              "#f768a1",
+              25000,
+              "#dd3497",
+              50000,
+              "#ae017e",
+              100000,
+              "#7a0177",
+            ],
+            "fill-opacity": 0.8,
+          },
+        });
+
+        map.addLayer({
+          id: "csd-outline",
+          type: "line",
+          source: "csd",
+          "source-layer": "csd",
+          paint: {
+            "line-color": "#ffffff",
+            "line-width": 1,
+          },
+        });
+
+        map.addLayer({
+          id: "msn-lines",
+          type: "line",
+          source: "msn",
+          "source-layer": "msn",
+          paint: {
+            "line-color": "#00adf2",
+            "line-width": 2,
+          },
+        });
+
+        map.addLayer({
+          id: "csd-selected-outline",
+          type: "line",
+          source: "csd",
+          "source-layer": "csd",
+          paint: {
+            "line-color": "#ffd400",
+            "line-width": 3,
+            "line-opacity": [
+              "case",
+              ["boolean", ["feature-state", "selected"], false],
+              1,
+              0,
+            ],
+          },
+        });
+
+        let activePopup = null;
+
+        const showPopup = (lngLat, html) => {
+          if (activePopup) activePopup.remove();
+          activePopup = new maplibregl.Popup()
+            .setLngLat(lngLat)
+            .setHTML(html)
+            .addTo(map);
+        };
+
+        const csdPopupHtml = (props) =>
+          `<strong>${props.CSDNAME}</strong><br>
+          Population (2025): ${props.population_2025.toLocaleString()}<br>
+          Population Growth (2025-2050): ${Math.round(props.pop_change_2025_2050)}%`;
+
+        const selectedCsds = new Map();
+        const selectedListEl = document.getElementById("selected-list");
+        const selectedCountEl = document.getElementById("selected-count");
+
+        const updateSelectedList = () => {
+          const names = [...selectedCsds.values()].sort();
+          selectedListEl.value = names.join("\n");
+          selectedCountEl.textContent = names.length;
+        };
+
+        const toggleSelection = (csduid, csdname) => {
+          const wasSelected = selectedCsds.has(csduid);
+          map.setFeatureState(
+            { source: "csd", sourceLayer: "csd", id: csduid },
+            { selected: !wasSelected },
+          );
+          if (wasSelected) {
+            selectedCsds.delete(csduid);
+          } else {
+            selectedCsds.set(csduid, csdname);
+          }
+          updateSelectedList();
+        };
+
+        document
+          .getElementById("copy-selection-btn")
+          .addEventListener("click", () => {
+            navigator.clipboard.writeText(selectedListEl.value);
+          });
+
+        document
+          .getElementById("clear-selection-btn")
+          .addEventListener("click", () => {
+            selectedCsds.forEach((_, csduid) => {
+              map.setFeatureState(
+                { source: "csd", sourceLayer: "csd", id: csduid },
+                { selected: false },
+              );
+            });
+            selectedCsds.clear();
+            updateSelectedList();
+          });
+
+        map.on("click", "csd-fill", (e) => {
+          const props = e.features[0].properties;
+          toggleSelection(props.CSDUID, props.CSDNAME);
+          showPopup(e.lngLat, csdPopupHtml(props));
+        });
+
+        map.on("mouseenter", "csd-fill", () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", "csd-fill", () => {
+          map.getCanvas().style.cursor = "";
+        });
+
+        map.on("click", "msn-lines", (e) => {
+          const props = e.features[0].properties;
+          showPopup(
+            e.lngLat,
+            `<strong>${props.R_STNAM}</strong><br>${props.R_PLACE}`,
+          );
+        });
+
+        map.on("mouseenter", "msn-lines", () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", "msn-lines", () => {
+          map.getCanvas().style.cursor = "";
+        });
+
+        const minInput = document.getElementById("pop-filter-min-input");
+        const maxInput = document.getElementById("pop-filter-max-input");
+
+        const parseInput = (input) =>
+          Number(input.value.replace(/,/g, "")) || 0;
+
+        const applyPopFilter = () => {
+          const min = parseInput(minInput);
+          const max = parseInput(maxInput);
+          const filter = [
+            "all",
+            [">=", ["get", "population_2025"], min],
+            ["<=", ["get", "population_2025"], max],
+          ];
+          map.setFilter("csd-fill", filter);
+          map.setFilter("csd-outline", filter);
+        };
+
+        const formatInput = (input) => {
+          input.value = parseInput(input).toLocaleString();
+        };
+
+        [minInput, maxInput].forEach((input) => {
+          input.addEventListener("change", () => {
+            formatInput(input);
+            applyPopFilter();
+          });
+        });
+
+        applyPopFilter();
+
+        const csvColumns = [
+          "CSDUID",
+          "DGUID",
+          "CSDNAME",
+          "CSDTYPE",
+          "LANDAREA",
+          "PRUID",
+          "population_2021",
+          "population_2025",
+          "population_2050",
+          "pop_change_2021_2025",
+          "pop_change_2025_2050",
+        ];
+
+        const csvEscape = (value) => {
+          const str = String(value ?? "");
+          return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+        };
+
+        document
+          .getElementById("export-csv-btn")
+          .addEventListener("click", () => {
+            const features = map.queryRenderedFeatures({
+              layers: ["csd-fill"],
+            });
+            const seen = new Set();
+            const rows = [];
+
+            features.forEach((feature) => {
+              const csduid = feature.properties.CSDUID;
+              if (seen.has(csduid)) return;
+              seen.add(csduid);
+              rows.push(
+                csvColumns.map((col) => csvEscape(feature.properties[col])),
+              );
+            });
+
+            const csv = [csvColumns, ...rows]
+              .map((row) => row.join(","))
+              .join("\n");
+
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "alberta_csd_visible.csv";
+            link.click();
+            URL.revokeObjectURL(url);
+          });
+
+        fetch("map_layers/alberta_csd.geojson")
+          .then((res) => res.json())
+          .then((data) => {
+            const csdOptions = document.getElementById("csd-options");
+            const csdByName = new Map();
+
+            data.features.forEach((feature) => {
+              const name = feature.properties.CSDNAME;
+              csdByName.set(name, feature);
+              const option = document.createElement("option");
+              option.value = name;
+              csdOptions.appendChild(option);
+            });
+
+            const featureBounds = (feature) => {
+              const bounds = new maplibregl.LngLatBounds();
+              const geom = feature.geometry;
+              const polygons =
+                geom.type === "MultiPolygon"
+                  ? geom.coordinates
+                  : [geom.coordinates];
+              polygons.forEach((polygon) =>
+                polygon.forEach((ring) =>
+                  ring.forEach((coord) => bounds.extend(coord)),
+                ),
+              );
+              return bounds;
+            };
+
+            const searchInput = document.getElementById("csd-search");
+            searchInput.addEventListener("change", () => {
+              const feature = csdByName.get(searchInput.value);
+              if (!feature) return;
+              const bounds = featureBounds(feature);
+              map.fitBounds(bounds, { padding: 60 });
+              showPopup(bounds.getCenter(), csdPopupHtml(feature.properties));
+            });
+          });
+      });
+    </script>
+  </body>
+</html>
