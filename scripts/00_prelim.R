@@ -1,5 +1,5 @@
+readRenviron("../.env")
 # Preliminary scan of available data and existing methodology
-readRenviron("../.env") 
 
 library(msmdata)
 library(tidyverse)
